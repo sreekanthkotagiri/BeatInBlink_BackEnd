@@ -65,7 +65,7 @@ export const createGuestExam = async (req: Request, res: Response) => {
     const examId = examInsertResult.rows[0].id; // 👈 capture inserted exam id here
 
     // ✅ Generate exam link immediately
-    const examLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/guest-exam/${examId}`;
+    const examLink = `${process.env.FRONTEND_URL}/guest-exam/${examId}`;
 
     // Update the exam with generated link
     await client.query(
@@ -77,7 +77,6 @@ export const createGuestExam = async (req: Request, res: Response) => {
     // 2. Insert each question into guest_questions table
     for (const q of questions) {
       const questionId = uuidv4();
-      console.log('yyyyyyyyyyyyyyyyyy ', q.question);
       await client.query(
         `INSERT INTO guest_questions (id, guest_exam_id, type, question_text, options, correct_answer, marks, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
@@ -162,7 +161,6 @@ export const getGuestExamById = async (req: Request, res: Response) => {
       [examId]
     );
 
-    console.log('ttttttttttttttttttt ', examResult);
     if (examResult.rows.length === 0) {
       return res.status(404).json({ message: 'Exam not found' });
     }
@@ -176,7 +174,6 @@ export const getGuestExamById = async (req: Request, res: Response) => {
        WHERE guest_exam_id = $1`,
       [examId]
     );
-    console.log('ttttttttttttttttttt ', questionsResult);
     const questions = questionsResult.rows.map((q: any) => ({
       id: q.id,
       type: q.type,
