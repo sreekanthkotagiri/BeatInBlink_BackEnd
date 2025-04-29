@@ -11,8 +11,20 @@ dotenv.config();
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://beat-in-blink-ui-git-main-sreekanths-projects-42ee9831.vercel.app',
+  'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
+];
+
 app.use(cors({
-  origin: 'http://localhost:3000', // Update to your frontend prod domain if needed
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
