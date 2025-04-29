@@ -4,40 +4,41 @@ import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected';
-
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3000',  // allow only frontend origin
-  credentials: true                 // allow cookies/auth headers
+  origin: 'http://localhost:3000',  // Update for prod if needed
+  credentials: true
 }));
 app.use(express.json());
 
 // PostgreSQL connection
 export const db = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // for hosted PostgreSQL like ElephantSQL
+  }
 });
 
-// Test DB connection
+// Connect and log once (optional)
 db.connect()
   .then(() => console.log('✅ Connected to PostgreSQL'))
   .catch(err => console.error('❌ DB connection error', err));
 
-// Sample route
+// Routes
 app.get('/', (_req, res) => {
   res.send('EduExamine API is running 🎓');
 });
-
 app.use('/api/protected', protectedRoutes);
 app.use('/api/auth', authRoutes);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
-});
+// Export Express as handler (Vercel-compatible)
+export default (req: VercelRequest, res: VercelResponse) => {
+  app(req as any, res as any);
+};
