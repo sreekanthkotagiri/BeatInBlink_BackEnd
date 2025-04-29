@@ -1,7 +1,7 @@
 // 1. Register Guest User
 import { Request, Response } from 'express';
-import db from '../config/db'; // Adjust based on your DB connection import
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '../index';
 
 export const registerGuestUser = async (req: Request, res: Response) => {
   const { guestName } = req.body;

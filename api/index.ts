@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected';
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import { Request, Response } from 'express';
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +39,6 @@ app.use('/api/protected', protectedRoutes);
 app.use('/api/auth', authRoutes);
 
 // Export Express as handler (Vercel-compatible)
-export default (req: VercelRequest, res: VercelResponse) => {
-  app(req as any, res as any);
-};
+export default function handler(req: any, res: any) {
+  app(req, res);
+}
