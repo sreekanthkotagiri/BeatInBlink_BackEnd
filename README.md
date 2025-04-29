@@ -1,1 +1,1 @@
-# BeatInBlink_BackEnd
+# Backend - Node.js + Express + PostgreSQL + JWT
