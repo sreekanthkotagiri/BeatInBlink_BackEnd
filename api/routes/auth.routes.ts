@@ -1,5 +1,5 @@
 import express from 'express';
-import { instituteReg, loginUser, refreshAccessToken, logoutUser, studentReg, getStudentById, getExams, getDashBoard, getResults, createExam, getExamById, updateExamById, bulkRegisterStudents, getBranches, createBranch, assignExamToBranches, updateStudent, ViewExamById, getAllAnnouncements, enableExamToBranches, allExams, getAllStudentExams, downloadSubmittedExam  } from '../controllers/auth.controller'
+import { instituteReg, loginUser, refreshAccessToken, logoutUser, studentReg, getStudentById, getExams, getDashBoard, getResults, createExam, getExamById, updateExamById, bulkRegisterStudents, getBranches, createBranch, updateStudent, ViewExamById, getAllAnnouncements, enableExamToBranches, getAllStudentExams, downloadSubmittedExam  } from '../controllers/auth.controller'
 import { authenticateToken } from '../middleware/auth.middleware';
 import { getStudentWithSearch, studentResultById, submitStudentExam } from '../controllers/student.auth.controller';
 import { createGuestExam, getGuestExamById, getGuestExamResults, getGuestExamsByGuestCode, registerGuestUser, submitGuestExam } from '../controllers/guest.controller';
