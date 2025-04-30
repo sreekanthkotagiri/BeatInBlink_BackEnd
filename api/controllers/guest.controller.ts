@@ -63,7 +63,6 @@ export const createGuestExam = async (req: Request, res: Response) => {
     );
 
     const examId = examInsertResult.rows[0].id; // 👈 capture inserted exam id here
-
     // ✅ Generate exam link immediately
     const examLink = `${process.env.FRONTEND_URL}/guest-exam/${examId}`;
 
