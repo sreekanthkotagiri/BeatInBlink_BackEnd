@@ -44,44 +44,87 @@ export const registerGuestUser = async (req: Request, res: Response) => {
 
 
 export const createGuestExam = async (req: Request, res: Response) => {
-  const { guestId, title, description, scheduled_date, duration_min, pass_percentage, created_by, questions } = req.body;
+  const {
+    guestId,
+    title,
+    description,
+    scheduled_date,
+    duration_min,
+    pass_percentage,
+    created_by,
+    questions,
+    enableTimeLimit = false,
+    restrictAccess = false
+  } = req.body;
 
-  if (!title || !scheduled_date || !duration_min || !pass_percentage || !created_by || !Array.isArray(questions) || questions.length === 0) {
+  // Basic validation
+  if (!guestId || !title || !scheduled_date || pass_percentage == null || !created_by || !Array.isArray(questions) || questions.length === 0) {
     return res.status(400).json({ message: 'Missing required fields or no questions provided.' });
   }
 
+  if (enableTimeLimit && (!duration_min || duration_min <= 0)) {
+    return res.status(400).json({ message: 'Duration is required when time limit is enabled.' });
+  }
+
   const client = await db.connect();
+
   try {
     await client.query('BEGIN');
 
-    // 1. Insert exam into guest_exams table and capture inserted id
-    const examInsertResult = await client.query(
-      `INSERT INTO guest_exams (guest_user_id, title, description, scheduled_date, duration_min, pass_percentage)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id`,
-      [guestId, title, description, scheduled_date, duration_min, pass_percentage]
-    );
+    // 1. Insert exam
+    const insertExamQuery = `
+      INSERT INTO guest_exams (
+        guest_user_id,
+        title,
+        description,
+        scheduled_date,
+        duration_min,
+        pass_percentage,
+        enable_time_limit,
+        restrict_access
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id;
+    `;
 
-    const examId = examInsertResult.rows[0].id; // 👈 capture inserted exam id here
-    // ✅ Generate exam link immediately
+    const examInsertResult = await client.query(insertExamQuery, [
+      guestId,
+      title,
+      description,
+      scheduled_date,
+      enableTimeLimit ? duration_min : null , // allow null if not enabled
+      pass_percentage,
+      enableTimeLimit,
+      restrictAccess
+    ]);
+
+    const examId = examInsertResult.rows[0].id;
     const examLink = `${process.env.FRONTEND_URL}/guest-exam/${examId}`;
 
-    // Update the exam with generated link
+    // 2. Update exam with link
     await client.query(
       `UPDATE guest_exams SET exam_link = $1 WHERE id = $2`,
       [examLink, examId]
     );
 
-
-    // 2. Insert each question into guest_questions table
+    // 3. Insert questions
     for (const q of questions) {
       const questionId = uuidv4();
       await client.query(
-        `INSERT INTO guest_questions (id, guest_exam_id, type, question_text, options, correct_answer, marks, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        `INSERT INTO guest_questions (
+          id,
+          guest_exam_id,
+          type,
+          question_text,
+          options,
+          correct_answer,
+          marks,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
         [
           questionId,
-          examId,                // 👈 now use correct examId
+          examId,
           q.type,
           q.question,
           q.choices ? JSON.stringify(q.choices) : null,
@@ -92,7 +135,6 @@ export const createGuestExam = async (req: Request, res: Response) => {
     }
 
     await client.query('COMMIT');
-
     res.status(201).json({ message: 'Guest Exam created successfully', examId });
 
   } catch (error) {
@@ -150,11 +192,19 @@ export const getGuestExamById = async (req: Request, res: Response) => {
   }
 
   const client = await db.connect();
-  
+
   try {
-    // 1. Fetch exam basic info
+    // 1. Fetch exam details including new fields
     const examResult = await client.query(
-      `SELECT id, title, description, scheduled_date, duration_min, pass_percentage
+      `SELECT
+        id,
+        title,
+        description,
+        scheduled_date,
+        duration_min,
+        pass_percentage,
+        enable_time_limit,
+        restrict_access
        FROM guest_exams
        WHERE id = $1`,
       [examId]
@@ -166,13 +216,14 @@ export const getGuestExamById = async (req: Request, res: Response) => {
 
     const exam = examResult.rows[0];
 
-    // 2. Fetch exam questions
+    // 2. Fetch questions
     const questionsResult = await client.query(
       `SELECT id, type, question_text AS text, options
        FROM guest_questions
        WHERE guest_exam_id = $1`,
       [examId]
     );
+
     const questions = questionsResult.rows.map((q: any) => ({
       id: q.id,
       type: q.type,
@@ -183,8 +234,8 @@ export const getGuestExamById = async (req: Request, res: Response) => {
     res.status(200).json({
       exam: {
         ...exam,
-        questions
-      }
+        questions,
+      },
     });
 
   } catch (error) {
@@ -194,6 +245,7 @@ export const getGuestExamById = async (req: Request, res: Response) => {
     client.release();
   }
 };
+
 
 export const submitGuestExam = async (req: Request, res: Response) => {
   const { examId, studentName, answers } = req.body;
