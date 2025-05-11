@@ -51,7 +51,7 @@ export const submitStudentExam = async (req: Request, res: Response) => {
   }
 
   try {
-    // Get all questions for the exam
+    // Step 1: Get all questions for the exam
     const questionRes = await db.query(
       `SELECT id, correct_answer, marks FROM questions WHERE exam_paper_id = $1`,
       [examId]
@@ -60,13 +60,38 @@ export const submitStudentExam = async (req: Request, res: Response) => {
     const questions = questionRes.rows;
     let score = 0;
 
+    // Step 2: Evaluate answers
     for (const q of questions) {
       const givenAnswer = answers[q.id];
-      if (givenAnswer && givenAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) {
+      if (
+        givenAnswer &&
+        givenAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()
+      ) {
         score += q.marks;
       }
+
+      // Optional: For future question-level tracking
+      /*
+      await db.query(
+        `INSERT INTO student_exam_attempts (student_id, exam_id, question_id, selected_answer, is_correct, awarded_marks)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (student_id, exam_id, question_id) DO UPDATE
+         SET selected_answer = EXCLUDED.selected_answer,
+             is_correct = EXCLUDED.is_correct,
+             awarded_marks = EXCLUDED.awarded_marks`,
+        [
+          studentId,
+          examId,
+          q.id,
+          givenAnswer,
+          givenAnswer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase(),
+          givenAnswer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase() ? q.marks : 0,
+        ]
+      );
+      */
     }
 
+    // Step 3: Fetch pass percentage
     const examMeta = await db.query(`SELECT pass_percentage FROM exams WHERE id = $1`, [examId]);
     const passPercentage = examMeta.rows[0]?.pass_percentage ?? 35;
 
@@ -74,27 +99,30 @@ export const submitStudentExam = async (req: Request, res: Response) => {
     const percentage = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
     const status = percentage >= passPercentage ? 'Pass' : 'Fail';
 
-    // Save the result
+    // Step 4: Save to student_exam_results
     await db.query(
-      `INSERT INTO results (student_id, exam_id, score, status)
+      `INSERT INTO student_exam_results (student_id, exam_id, score, status)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (student_id, exam_id)
-       DO UPDATE SET score = EXCLUDED.score, status = EXCLUDED.status, created_at = now()`,
+       DO UPDATE SET score = EXCLUDED.score, status = EXCLUDED.status, submitted_at = now()`,
       [studentId, examId, score.toFixed(2), status]
     );
 
-    // Mark enrollment as submitted
+    // Step 5: Update exam_student_assignments
     await db.query(
-      `UPDATE student_exam_enrollments SET has_submitted = true WHERE student_id = $1 AND exam_id = $2`,
+      `UPDATE exam_student_assignments
+       SET has_submitted = true
+       WHERE student_id = $1 AND exam_id = $2`,
       [studentId, examId]
     );
 
-    return res.json({ score: score.toFixed(2)+'/'+totalMarks, status });
+    return res.json({ score: `${score.toFixed(2)}/${totalMarks}`, status });
   } catch (err) {
     console.error('Error submitting exam:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 export const getAllExams = async (req: Request, res: Response) => {
   const { studentId,scheduled } = req.query;
