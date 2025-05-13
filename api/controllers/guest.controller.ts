@@ -218,7 +218,7 @@ export const getGuestExamById = async (req: Request, res: Response) => {
 
     // 2. Fetch questions
     const questionsResult = await client.query(
-      `SELECT id, type, question_text AS text, options
+      `SELECT id, type, question_text AS text, options, marks
        FROM guest_questions
        WHERE guest_exam_id = $1`,
       [examId]
@@ -229,6 +229,7 @@ export const getGuestExamById = async (req: Request, res: Response) => {
       type: q.type,
       text: q.text,
       options: q.options,
+      marks: q.marks,
     }));
 
     res.status(200).json({
@@ -258,7 +259,7 @@ export const submitGuestExam = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
-    // Fetch all correct questions and correctAnswers from DB
+    // Fetch all questions, correct answers, and marks
     const questionsResult = await client.query(
       `SELECT id, correct_answer, marks FROM guest_questions WHERE guest_exam_id = $1`,
       [examId]
@@ -268,40 +269,40 @@ export const submitGuestExam = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'No questions found for exam' });
     }
 
-    const correctAnswersMap: { [key: string]: { correctAnswer: string; marks: number } } = {};
-
-    questionsResult.rows.forEach((q) => {
-      correctAnswersMap[q.id] = {
-        correctAnswer: q.correct_answer,
-        marks: q.marks || 1,
-      };
-    });
+    const correctAnswersMap: {
+      [questionId: string]: { correctAnswer: string; marks: number };
+    } = {};
+    const evaluatedAnswers: {
+      [questionId: string]: { correctAnswer: string; studentAnswer: string, marks: number };
+    } = {};
 
     let totalScore = 0;
     let totalMarks = 0;
 
-    // Calculate student score
-    for (const questionId in correctAnswersMap) {
-      const correctAns = correctAnswersMap[questionId].correctAnswer;
-      const marks = correctAnswersMap[questionId].marks;
+    questionsResult.rows.forEach((q) => {
+      const questionId = q.id;
+      const correctAnswer = (q.correct_answer || '').trim();
+      const marks = q.marks || 1;
+
+      correctAnswersMap[questionId] = { correctAnswer, marks };
       totalMarks += marks;
 
-      const submittedAnswer = answers[questionId];
+      const submittedAnswer = (answers[questionId] || '').trim();
 
-      if (!submittedAnswer) {
-        continue; // no answer submitted for this question
-      }
+      evaluatedAnswers[questionId] = {
+        correctAnswer,
+        studentAnswer: submittedAnswer,
+        marks: marks
+      };
 
-      // Compare after trimming and ignoring case
-      if (submittedAnswer.trim().toLowerCase() === correctAns.trim().toLowerCase()) {
+      if (
+        submittedAnswer.toLowerCase() === correctAnswer.toLowerCase()
+      ) {
         totalScore += marks;
       }
-    }
+    });
 
-    // Calculate percentage
     const scorePercentage = (totalScore / totalMarks) * 100;
-
-    // Save student's submission
     const submissionId = uuidv4();
 
     await client.query(
@@ -313,12 +314,11 @@ export const submitGuestExam = async (req: Request, res: Response) => {
     await client.query('COMMIT');
 
     return res.status(200).json({
-
       totalScore,
       totalMarks,
       scorePercentage: Math.round(scorePercentage),
+      evaluatedAnswers, // ✅ Send detailed answer breakdown
     });
-
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error submitting exam:', error);
@@ -361,13 +361,21 @@ export const getGuestExamResults = async (req: Request, res: Response) => {
       return res.status(200).json({ results: [] }); // No exams, no results
     }
 
-    // Step 3: Fetch all student attempts for these exams
+    // Step 3: Fetch all student attempts with total marks
     const attemptsResult = await client.query(
       `
-      SELECT a.id, e.title AS exam_title, a.student_name, a.score, a.submitted_at
+      SELECT 
+        a.id, 
+        e.title AS exam_title, 
+        a.student_name, 
+        a.score, 
+        a.submitted_at,
+        COALESCE(SUM(q.marks), 0) AS total_marks
       FROM guest_exam_attempts a
       INNER JOIN guest_exams e ON a.guest_exam_id = e.id
+      LEFT JOIN guest_questions q ON q.guest_exam_id = e.id
       WHERE a.guest_exam_id = ANY($1)
+      GROUP BY a.id, e.title, a.student_name, a.score, a.submitted_at
       ORDER BY a.submitted_at DESC
       `,
       [examIds]
