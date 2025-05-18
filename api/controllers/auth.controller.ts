@@ -420,11 +420,9 @@ export const getExams = async (req: Request, res: Response) => {
       SELECT 
         e.id, 
         e.title, 
-        e.scheduled_date, 
+        e.created_at, 
         e.duration_min,
-        EXISTS (
-          SELECT 1 FROM exam_branch_assignments b WHERE b.exam_id = e.id
-        ) AS enabled
+        e.is_enabled
       FROM exams e
       WHERE e.created_by = $1
     `;
@@ -475,34 +473,37 @@ export const createExam = async (req: Request, res: Response) => {
     const {
       title,
       description,
-      scheduled_date,
       expiry_date,
       duration_min,
       pass_percentage,
       created_by,
       questions,
     } = req.body;
- const { instituteId } = req.query;
+    const { instituteId } = req.query;
     // ✅ Calculate total marks
     const totalMarks = questions.reduce((sum: number, q: any) => sum + Number(q.marks || 0), 0);
 
     await client.query('BEGIN');
 
     // ✅ Insert into exams
-    const examInsertQuery = `
-      INSERT INTO exams (title, description, created_by, scheduled_date, expires_at, duration_min, pass_percentage, total_marks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id`;
-    const { rows: examRows } = await client.query(examInsertQuery, [
-      title,
-      description,
-      instituteId,
-      scheduled_date,
-      expiry_date,
-      duration_min,
-      pass_percentage,
-      totalMarks
-    ]);
+    const examInsertQuery = expiry_date
+      ? `
+      INSERT INTO exams (title, description, created_by, expires_at, duration_min, pass_percentage, total_marks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+    `
+      : `
+      INSERT INTO exams (title, description, created_by, duration_min, pass_percentage, total_marks)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+    `;
+
+    const examParams = expiry_date
+      ? [title, description, created_by, expiry_date, duration_min, pass_percentage, totalMarks]
+      : [title, description, created_by, duration_min, pass_percentage, totalMarks];
+
+    const { rows: examRows } = await client.query(examInsertQuery, examParams);
+
     const examId = examRows[0].id;
 
     // ✅ Insert each question
@@ -534,7 +535,7 @@ export const getExamById = async (req: Request, res: Response) => {
   try {
 
     // Fetch exam basic info
-    const examQuery = `SELECT id, title, description, scheduled_date, duration_min, pass_percentage, created_by FROM exams WHERE id = $1`;
+    const examQuery = `SELECT id, title, description, created_at, duration_min, pass_percentage, created_by FROM exams WHERE id = $1`;
     const { rows: examRows } = await client.query(examQuery, [examId]);
 
     if (examRows.length === 0) {
@@ -561,7 +562,7 @@ export const getExamById = async (req: Request, res: Response) => {
       id: exam.id,
       title: exam.title,
       description: exam.description,
-      scheduled_date: exam.scheduled_date,
+      created_at: exam.created_at,
       duration_min: exam.duration_min,
       created_by: exam.created_by,
       questions
@@ -1092,9 +1093,6 @@ export const assignExamToBranches = async (req: Request, res: Response) => {
     );
     const existingBranchIds: number[] = existingRes.rows.map((row) => Number(row.branch_id));
 
-    console.log('📌 Existing Branch IDs:', existingBranchIds);
-    console.log('📌 Incoming Branch IDs:', branchIds);
-
     // Step 2: Normalize types to avoid mismatch issues
     const normalizedIncomingBranchIds: number[] = branchIds.map((id: any) => Number(id));
 
@@ -1105,9 +1103,6 @@ export const assignExamToBranches = async (req: Request, res: Response) => {
     const branchIdsToDisable = existingBranchIds.filter(
       (id) => !normalizedIncomingBranchIds.includes(id)
     );
-
-    console.log('✅ Branches to Add:', branchIdsToAdd);
-    console.log('🛑 Branches to Disable:', branchIdsToDisable);
 
     // Step 4: Add/re-enable branches and insert students
     for (const branchId of normalizedIncomingBranchIds) {
@@ -1615,7 +1610,7 @@ export const searchExams = async (req: Request, res: Response) => {
       search = '',
       branch = '',
       date = '',
-      sortField = 'scheduled_date',
+      sortField = 'created_at',
       sortOrder = 'asc',
       instituteId
     } = req.query;
@@ -1624,19 +1619,19 @@ export const searchExams = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'instituteId is required' });
     }
 
-    const validSortFields = ['title', 'scheduled_date'];
+    const validSortFields = ['title', 'created_at'];
     const validSortOrder = ['asc', 'desc'];
 
     const finalSortField = validSortFields.includes(sortField as string)
       ? (sortField as string)
-      : 'scheduled_date';
+      : 'created_at';
 
     const finalSortOrder = validSortOrder.includes((sortOrder as string).toLowerCase())
       ? (sortOrder as string)
       : 'asc';
 
     let query = `
-      SELECT DISTINCT e.id, e.title, e.scheduled_date, e.duration_min, e.pass_percentage, e.is_enabled, e.expires_at, e.result_locked
+      SELECT DISTINCT e.id, e.title, e.created_at, e.duration_min, e.pass_percentage, e.is_enabled, e.expires_at, e.result_locked
       FROM exams e
       LEFT JOIN exam_branch_assignments eb ON eb.exam_id = e.id AND eb.is_enabled = true
       LEFT JOIN branches b ON b.id = eb.branch_id
@@ -1656,7 +1651,7 @@ export const searchExams = async (req: Request, res: Response) => {
 
     if (typeof date === 'string' && date.trim() !== '') {
       values.push(date.trim());
-      query += ` AND DATE(e.scheduled_date) = $${values.length}`;
+      query += ` AND DATE(e.created_at) = $${values.length}`;
     }
 
     query += ` ORDER BY e.${finalSortField} ${finalSortOrder.toUpperCase()}`;

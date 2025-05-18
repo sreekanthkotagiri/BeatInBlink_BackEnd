@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../index';
+import { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } from 'docx';
 
 export const registerGuestUser = async (req: Request, res: Response) => {
   const { guestName } = req.body;
@@ -54,7 +55,8 @@ export const createGuestExam = async (req: Request, res: Response) => {
     created_by,
     questions,
     enableTimeLimit = false,
-    restrictAccess = false
+    restrictAccess = false,
+    downloadable,
   } = req.body;
 
   // Basic validation
@@ -81,9 +83,10 @@ export const createGuestExam = async (req: Request, res: Response) => {
         duration_min,
         pass_percentage,
         enable_time_limit,
-        restrict_access
+        restrict_access,
+        downloadable
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id;
     `;
 
@@ -92,10 +95,11 @@ export const createGuestExam = async (req: Request, res: Response) => {
       title,
       description,
       scheduled_date,
-      enableTimeLimit ? duration_min : null , // allow null if not enabled
+      enableTimeLimit ? duration_min : null, // allow null if not enabled
       pass_percentage,
       enableTimeLimit,
-      restrictAccess
+      restrictAccess,
+      downloadable
     ]);
 
     const examId = examInsertResult.rows[0].id;
@@ -259,7 +263,7 @@ export const submitGuestExam = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
-    // Fetch all questions, correct answers, and marks
+    // Fetch questions AND downloadable flag in one go using JOIN or separate queries
     const questionsResult = await client.query(
       `SELECT id, correct_answer, marks FROM guest_questions WHERE guest_exam_id = $1`,
       [examId]
@@ -269,11 +273,23 @@ export const submitGuestExam = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'No questions found for exam' });
     }
 
+    // Fetch downloadable value from guest_exams
+    const examMetaResult = await client.query(
+      `SELECT downloadable FROM guest_exams WHERE id = $1`,
+      [examId]
+    );
+
+    if (examMetaResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
+
+    const { downloadable } = examMetaResult.rows[0];
+
     const correctAnswersMap: {
       [questionId: string]: { correctAnswer: string; marks: number };
     } = {};
     const evaluatedAnswers: {
-      [questionId: string]: { correctAnswer: string; studentAnswer: string, marks: number };
+      [questionId: string]: { correctAnswer: string; studentAnswer: string; marks: number };
     } = {};
 
     let totalScore = 0;
@@ -292,12 +308,10 @@ export const submitGuestExam = async (req: Request, res: Response) => {
       evaluatedAnswers[questionId] = {
         correctAnswer,
         studentAnswer: submittedAnswer,
-        marks: marks
+        marks
       };
 
-      if (
-        submittedAnswer.toLowerCase() === correctAnswer.toLowerCase()
-      ) {
+      if (submittedAnswer.toLowerCase() === correctAnswer.toLowerCase()) {
         totalScore += marks;
       }
     });
@@ -317,7 +331,8 @@ export const submitGuestExam = async (req: Request, res: Response) => {
       totalScore,
       totalMarks,
       scorePercentage: Math.round(scorePercentage),
-      evaluatedAnswers, // ✅ Send detailed answer breakdown
+      evaluatedAnswers,
+      downloadable, // ✅ Include in response
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -327,6 +342,7 @@ export const submitGuestExam = async (req: Request, res: Response) => {
     client.release();
   }
 };
+
 
 export const getGuestExamResults = async (req: Request, res: Response) => {
   const { guestCode } = req.query;
@@ -390,5 +406,134 @@ export const getGuestExamResults = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   } finally {
     client.release();
+  }
+};
+
+
+export const downloadExam = async (req: Request, res: Response) => {
+  const { examId } = req.query;
+
+  if (!examId) {
+    return res.status(400).json({ message: 'examId is required' });
+  }
+
+  try {
+    // Fetch exam metadata
+    const resultQuery = `
+      SELECT e.title AS exam_title
+      FROM guest_exams e
+      WHERE e.id = $1
+    `;
+    const { rows: resultRows } = await db.query(resultQuery, [examId]);
+
+    if (resultRows.length === 0) {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
+    const data = resultRows[0];
+
+    // Fetch questions
+    const questionQuery = `SELECT * FROM guest_questions WHERE guest_exam_id = $1`;
+    const { rows: questionRows } = await db.query(questionQuery, [examId]);
+    const questions = questionRows.map((q: any) => {
+      const parsedOptions = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+      return {
+        id: q.id,
+        text: q.question_text || '',
+        type: q.type,
+        options: Array.isArray(parsedOptions) ? parsedOptions : parsedOptions?.choices || [],
+        correctAnswer: q.correct_answer || '',
+        marks: q.marks != null ? q.marks : '-',
+      };
+    });
+
+    // Construct docx document
+    const doc = new Document({
+      sections: [
+        {
+          headers: {
+            default: new Header({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({ text: 'BeatInBlink Exam Paper', bold: true, size: 24 }),
+                  ],
+                })
+              ]
+            })
+          },
+          properties: {
+            page: {
+              margin: { top: 720, right: 720, bottom: 720, left: 720 }, // 1 inch margins
+            },
+          },
+          children: [
+            new Paragraph({
+              border: {
+                bottom: { color: 'auto', space: 1, style: BorderStyle.SINGLE, size: 6 },
+              },
+              children: [
+                new TextRun({ text: data.exam_title || 'Exam Title', bold: true, size: 36 }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: '📝 Exam Paper', bold: true, size: 28 }),
+              ],
+              spacing: { after: 300 },
+            }),
+            ...questions.flatMap((q: any, idx: number) => {
+              const questionParagraphs = [
+                new Paragraph({
+                  spacing: { after: 200 },
+                  children: [
+                    new TextRun({
+                      text: `${idx + 1}. ${q.text} (${q.marks} mark${q.marks > 1 ? 's' : ''})`,
+                      bold: true,
+                      size: 26,
+                    }),
+                  ],
+                }),
+              ];
+
+              if (Array.isArray(q.options)) {
+                q.options.forEach((opt: string, i: number) => {
+                  questionParagraphs.push(
+                    new Paragraph({
+                      spacing: { after: 100 },
+                      children: [
+                        new TextRun({ text: `   ${String.fromCharCode(65 + i)}. ${opt}`, size: 24 }),
+                      ],
+                    })
+                  );
+                });
+              }
+
+              questionParagraphs.push(
+                new Paragraph({
+                  spacing: { after: 300 },
+                  children: [
+                    new TextRun({ text: '   ✅ Correct Answer: ', bold: true, size: 24 }),
+                    new TextRun({ text: q.correctAnswer, size: 24 }),
+                  ],
+                })
+              );
+
+              return questionParagraphs;
+            }),
+          ],
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    res.setHeader('Content-Disposition', 'attachment; filename=exam_result.docx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Download error:', err);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
