@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../index';
-
+import { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } from 'docx';
 export const studentResultById = async (req: Request, res: Response) => {
   const { studentId } = req.query;
 
@@ -34,7 +34,7 @@ SELECT
     'pending', COUNT(*) FILTER (WHERE sr.status IS NULL)
   ) AS stats
 FROM student_results sr;
-`,  [studentId]);
+`, [studentId]);
       return res.json(result.rows);
     }
   } catch (err) {
@@ -92,7 +92,7 @@ export const submitStudentExam = async (req: Request, res: Response) => {
     }
 
     // Step 3: Fetch pass percentage
-    const examMeta = await db.query(`SELECT pass_percentage FROM exams WHERE id = $1`, [examId]);
+    const examMeta = await db.query(`SELECT pass_percentage, result_locked FROM exams WHERE id = $1`, [examId]);
     const passPercentage = examMeta.rows[0]?.pass_percentage ?? 35;
 
     const totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
@@ -115,35 +115,165 @@ export const submitStudentExam = async (req: Request, res: Response) => {
        WHERE student_id = $1 AND exam_id = $2`,
       [studentId, examId]
     );
-
-    return res.json({ score: `${score.toFixed(2)}/${totalMarks}`, status });
+    if (examMeta.rows[0]?.result_locked)
+      return res.json({ result_locked: examMeta.rows[0]?.result_locked });
+    else
+      return res.json({ result_locked: examMeta.rows[0]?.result_locked, score: `${score.toFixed(2)}/${totalMarks}`, status });
   } catch (err) {
     console.error('Error submitting exam:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
 
+export const downloadSubmittedExam = async (req: Request, res: Response) => {
+  const { studentId, examId } = req.query;
+
+  if (!studentId || !examId) {
+    return res.status(400).json({ message: 'studentId and examId are required' });
+  }
+  try {
+    // Fetch exam and result details
+    const resultQuery = `
+      SELECT r.score, r.status, r.submitted_at, e.title AS exam_title
+      FROM student_exam_results r
+      JOIN exams e ON r.exam_id = e.id
+      WHERE r.student_id = $1 AND r.exam_id = $2
+    `;
+    const { rows: resultRows } = await db.query(resultQuery, [studentId, examId]);
+    if (resultRows.length === 0) {
+      return res.status(404).json({ message: 'Result not found for this student and exam' });
+    }
+    const data = resultRows[0];
+
+    // Fetch questions
+    const questionQuery = `SELECT * FROM questions WHERE exam_paper_id = $1`;
+    const { rows: questionRows } = await db.query(questionQuery, [examId]);
+
+    const questions = questionRows.map((q: any) => {
+      const parsedOptions = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+      return {
+        id: q.id,
+        text: q.question_text,
+        type: parsedOptions.type,
+        options: parsedOptions.choices as string[],
+        correctAnswer: q.correct_answer,
+        marks: q.marks,
+      };
+    });
+
+    // Construct docx document
+    const doc = new Document({
+      sections: [
+        {
+          headers: {
+            default: new Header({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({ text: 'BeatInBlink Exam Paper', bold: true, size: 24 }),
+                  ],
+                })
+              ]
+            })
+          },
+          properties: {
+            page: {
+              margin: { top: 720, right: 720, bottom: 720, left: 720 }, // 1 inch margins
+            },
+          },
+          children: [
+            new Paragraph({
+              border: {
+                bottom: { color: 'auto', space: 1, style: BorderStyle.SINGLE, size: 6 },
+              },
+              children: [
+                new TextRun({ text: data.exam_title || 'Exam Title', bold: true, size: 36 }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: '📝 Exam Paper', bold: true, size: 28 }),
+              ],
+              spacing: { after: 300 },
+            }),
+            ...questions.flatMap((q: any, idx: number) => {
+              const questionParagraphs = [
+                new Paragraph({
+                  spacing: { after: 200 },
+                  children: [
+                    new TextRun({
+                      text: `${idx + 1}. ${q.text} (${q.marks} mark${q.marks > 1 ? 's' : ''})`,
+                      bold: true,
+                      size: 26,
+                    }),
+                  ],
+                }),
+              ];
+
+              if (Array.isArray(q.options)) {
+                q.options.forEach((opt: string, i: number) => {
+                  questionParagraphs.push(
+                    new Paragraph({
+                      spacing: { after: 100 },
+                      children: [
+                        new TextRun({ text: `   ${String.fromCharCode(65 + i)}. ${opt}`, size: 24 }),
+                      ],
+                    })
+                  );
+                });
+              }
+
+              questionParagraphs.push(
+                new Paragraph({
+                  spacing: { after: 300 },
+                  children: [
+                    new TextRun({ text: '   ✅ Correct Answer: ', bold: true, size: 24 }),
+                    new TextRun({ text: q.correctAnswer, size: 24 }),
+                  ],
+                })
+              );
+
+              return questionParagraphs;
+            }),
+          ],
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    res.setHeader('Content-Disposition', 'attachment; filename=exam_result.docx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Download error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 
 export const getAllExams = async (req: Request, res: Response) => {
-  const { studentId,scheduled } = req.query;
+  const { studentId, scheduled } = req.query;
   if (!studentId) {
     return res.status(400).json({ message: 'Institute Id is required' });
   }
 
-  try { 
-    if(scheduled) {
-    const result = await db.query(
-      'SELECT id, title, scheduled_date, duration_min FROM exams WHERE created_by = $1 and scheduled_date > current_date',
-      [studentId]
-    );
-    return res.json(result.rows);
-  } else {
-    const result = await db.query(
-      'SELECT id, title, scheduled_date, duration_min FROM exams WHERE created_by = $1',
-      [studentId]
-    );
-    return res.json(result.rows);
-  }
+  try {
+    if (scheduled) {
+      const result = await db.query(
+        'SELECT id, title, scheduled_date, duration_min FROM exams WHERE created_by = $1 and scheduled_date > current_date',
+        [studentId]
+      );
+      return res.json(result.rows);
+    } else {
+      const result = await db.query(
+        'SELECT id, title, scheduled_date, duration_min FROM exams WHERE created_by = $1',
+        [studentId]
+      );
+      return res.json(result.rows);
+    }
   } catch (err) {
     console.error('Error fetching exam(s):', err);
     res.status(500).json({ message: 'Internal server error' });

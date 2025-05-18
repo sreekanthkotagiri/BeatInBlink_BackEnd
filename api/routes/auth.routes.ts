@@ -1,7 +1,7 @@
 import express from 'express';
-import { instituteReg, loginUser, refreshAccessToken, logoutUser, studentReg, getExams, getDashBoard, getResults, createExam, getExamById, updateExamById, bulkRegisterStudents, getBranches, createBranch, updateStudent, ViewExamById, getAllAnnouncements, getAllStudentExams, downloadSubmittedExam, getAllResults, getTopPerformers, getStudentReport, getExamSummary, searchExams, getAssignedBranchesForExam, searchStudents, assignExamToBranches, assignExamToStudents, toggleExamStatus, getStudentResults, getStudentProfileById, getStudentExams, toggleResultLock  } from '../controllers/auth.controller'
+import { instituteReg, loginUser, refreshAccessToken, logoutUser, studentReg, getExams, getDashBoard, getResults, createExam, getExamById, updateExamById, bulkRegisterStudents, getBranches, createBranch, updateStudent, ViewExamById, getAllAnnouncements, getAllStudentExams, getAllResults, getTopPerformers, getStudentReport, getExamSummary, searchExams, getAssignedBranchesForExam, searchStudents, assignExamToBranches, assignExamToStudents, toggleExamStatus, getStudentResults, getStudentProfileById, getStudentExams, toggleResultLock  } from '../controllers/auth.controller'
 import { authenticateToken } from '../middleware/auth.middleware';
-import { getStudentWithSearch, studentResultById, submitStudentExam } from '../controllers/student.auth.controller';
+import { downloadSubmittedExam, getStudentWithSearch, studentResultById, submitStudentExam } from '../controllers/student.auth.controller';
 import { createGuestExam, downloadExam, getGuestExamById, getGuestExamResults, getGuestExamsByGuestCode, registerGuestUser, submitGuestExam } from '../controllers/guest.controller';
 
 const router = express.Router();
@@ -13,7 +13,7 @@ router.get('/institute', getDashBoard);
 router.post('/inst-register', instituteReg);
 router.get('/institute/branches', getBranches);
 router.post('/institute/create-branch', createBranch);
-router.post('/institute/createExam', createExam);
+router.post('/institute/create-exam', createExam);
 router.get('/institute/exams', getExams);
 router.get('/institute/exams/:examId', getExamById);
 router.get('/institute/viewexam/:examId', ViewExamById);
@@ -40,7 +40,7 @@ router.get('/student/exams', getStudentExams );
 router.get('/student/results', studentResultById);
 
 router.post('/institute/bulk-upload', bulkRegisterStudents);
-router.post('/student/submitExam', submitStudentExam);
+router.post('/student/submit-exam', submitStudentExam);
 router.get('/student/exams/:examId', getExamById);
 router.get('/student/student-results', getStudentResults);
 router.get('/student/:studentId/exams', getAllStudentExams);

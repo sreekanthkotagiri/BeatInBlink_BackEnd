@@ -343,10 +343,11 @@ export const getStudentExams = async (req: Request, res: Response) => {
           e.id AS exam_id,
           e.title,
           e.description,
-          e.scheduled_date,
+          e.created_at,
           e.duration_min,
           e.pass_percentage,
           e.result_locked,
+          e.downloadable,
           COALESCE(esa.has_submitted, false) AS has_submitted,
           esa.is_enabled,
           esa.disabled_at,
@@ -383,11 +384,12 @@ export const getStudentExams = async (req: Request, res: Response) => {
       SELECT COALESCE(
         json_agg(
           json_build_object(
-            'exam_id', e.exam_id,
+            'id', e.exam_id,
             'title', e.title,
             'description', e.description,
-            'scheduled_date', e.scheduled_date,
+            'created_at', e.created_at,
             'taken_date', e.taken_date,
+            'downloadable', e.downloadable,
             'status', e.exam_status
           )
         ) FILTER (WHERE e.exam_id IS NOT NULL),
@@ -473,34 +475,34 @@ export const createExam = async (req: Request, res: Response) => {
     const {
       title,
       description,
-      expiry_date,
+      expires_at,
+      downloadable,
       duration_min,
       pass_percentage,
       created_by,
       questions,
     } = req.body;
-    const { instituteId } = req.query;
     // ✅ Calculate total marks
     const totalMarks = questions.reduce((sum: number, q: any) => sum + Number(q.marks || 0), 0);
 
     await client.query('BEGIN');
 
     // ✅ Insert into exams
-    const examInsertQuery = expiry_date
+    const examInsertQuery = expires_at
       ? `
-      INSERT INTO exams (title, description, created_by, expires_at, duration_min, pass_percentage, total_marks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO exams (title, description, created_by, expires_at, duration_min, pass_percentage, total_marks, downloadable)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id
     `
       : `
-      INSERT INTO exams (title, description, created_by, duration_min, pass_percentage, total_marks)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO exams (title, description, created_by, duration_min, pass_percentage, total_marks, downloadable)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id
     `;
 
-    const examParams = expiry_date
-      ? [title, description, created_by, expiry_date, duration_min, pass_percentage, totalMarks]
-      : [title, description, created_by, duration_min, pass_percentage, totalMarks];
+    const examParams = expires_at
+      ? [title, description, created_by, expires_at, duration_min, pass_percentage, totalMarks, downloadable]
+      : [title, description, created_by, duration_min, pass_percentage, totalMarks, downloadable];
 
     const { rows: examRows } = await client.query(examInsertQuery, examParams);
 
@@ -1294,76 +1296,7 @@ export const createAnnouncement = async (req: Request, res: Response) => {
   }
 };
 
-export const downloadSubmittedExam = async (req: Request, res: Response) => {
-  const { studentId, examId } = req.query;
 
-  if (!studentId || !examId) {
-    return res.status(400).json({ message: 'studentId and examId are required' });
-  }
-
-  try {
-    // Fetch exam and result details
-    const resultQuery = `
-      SELECT r.score, r.status, r.created_at, e.title AS exam_title
-      FROM results r
-      JOIN exams e ON r.exam_id = e.id
-      WHERE r.student_id = $1 AND r.exam_id = $2
-    `;
-    const { rows: resultRows } = await db.query(resultQuery, [studentId, examId]);
-
-    if (resultRows.length === 0) {
-      return res.status(404).json({ message: 'Result not found for this student and exam' });
-    }
-    const data = resultRows[0];
-
-    // Fetch questions
-    const questionQuery = `SELECT * FROM questions WHERE exam_paper_id = $1`;
-    const { rows: questionRows } = await db.query(questionQuery, [examId]);
-
-    const questions = questionRows.map((q: any) => {
-      const parsedOptions = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-      return {
-        id: q.id,
-        text: q.question_text,
-        type: parsedOptions.type,
-        options: parsedOptions.choices as string[],
-        correctAnswer: q.correct_answer,
-        marks: q.marks,
-      };
-    });
-
-    // PDF generation
-    const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument();
-
-    res.setHeader('Content-disposition', 'attachment; filename=exam_result.pdf');
-    res.setHeader('Content-type', 'application/pdf');
-    doc.pipe(res);
-
-    // Header with Exam Title
-    doc.fontSize(22).text(data.exam_title, { align: 'center', underline: true });
-    doc.moveDown();
-
-    // Question-wise Detail
-    doc.fontSize(16).text('Question Details', { underline: true });
-    questions.forEach((q: any, idx: number) => {
-      doc.moveDown(0.5);
-      doc.fontSize(12).text(`${idx + 1}. ${q.text}`);
-      if (q.options && q.options.length > 0) {
-        q.options.forEach((opt: string, i: number) => {
-          doc.text(`   ${String.fromCharCode(65 + i)}. ${opt}`);
-        });
-      }
-      doc.text(`   Correct Answer: ${q.correctAnswer}`);
-      doc.text(`   Marks: ${q.marks}`);
-    });
-
-    doc.end();
-  } catch (err) {
-    console.error('Download error:', err);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
 
 
 export const getAllResults = async (req: Request, res: Response) => {
