@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../index';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import PDFDocument from 'pdfkit';
 
