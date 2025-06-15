@@ -17,6 +17,11 @@ const allowedOrigins = [
   'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
 ];
 
+// Add dynamic frontend URL if defined in environment variables
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
