@@ -18,10 +18,10 @@ const allowedOrigins = [
   'https://beatinblink.com',
   'https://www.beatinblink.com',
   'https://beat-in-blink-ui.vercel.app', // Optional: clean production domain
-  // WebContainer origins
-  /^https:\/\/.*\.webcontainer\.io$/,
-  /^https:\/\/.*\.stackblitz\.io$/,
-  /^https:\/\/.*\.bolt\.new$/
+  // WebContainer origins with optional port numbers
+  /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
+  /^https:\/\/.*\.stackblitz\.io(?::\d+)?$/,
+  /^https:\/\/.*\.bolt\.new(?::\d+)?$/
 ];
 
 // Add dynamic frontend URL if defined in environment variables
