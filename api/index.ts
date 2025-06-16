@@ -17,7 +17,11 @@ const allowedOrigins = [
   'http://localhost:4173', // Vite preview port
   'https://beatinblink.com',
   'https://www.beatinblink.com',
-  'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
+  'https://beat-in-blink-ui.vercel.app', // Optional: clean production domain
+  // WebContainer origins
+  /^https:\/\/.*\.webcontainer\.io$/,
+  /^https:\/\/.*\.stackblitz\.io$/,
+  /^https:\/\/.*\.bolt\.new$/
 ];
 
 // Add dynamic frontend URL if defined in environment variables
@@ -32,7 +36,17 @@ app.use(cors({
       return callback(null, true);
     }
     
-    if (allowedOrigins.includes(origin)) {
+    // Check if origin matches any of the allowed origins (including regex patterns)
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.log(`CORS blocked origin: ${origin}`);
