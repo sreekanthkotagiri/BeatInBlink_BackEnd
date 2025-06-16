@@ -21,7 +21,17 @@ const allowedOrigins = [
   // WebContainer origins with optional port numbers
   /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
   /^https:\/\/.*\.stackblitz\.io(?::\d+)?$/,
-  /^https:\/\/.*\.bolt\.new(?::\d+)?$/
+  /^https:\/\/.*\.bolt\.new(?::\d+)?$/,
+  // Additional WebContainer and development origins
+  /^https:\/\/.*\.csb\.app(?::\d+)?$/,
+  /^https:\/\/.*\.gitpod\.io(?::\d+)?$/,
+  /^https:\/\/.*\.repl\.co(?::\d+)?$/,
+  /^https:\/\/.*\.vercel\.app(?::\d+)?$/,
+  /^https:\/\/.*\.netlify\.app(?::\d+)?$/,
+  // Local development with any port
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^http:\/\/0\.0\.0\.0:\d+$/
 ];
 
 // Add dynamic frontend URL if defined in environment variables
