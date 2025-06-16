@@ -13,6 +13,7 @@ const app = express();
 // Middleware
 const allowedOrigins = [
   'http://localhost:3000',
+  'https://beatinblink.com',
   'https://www.beatinblink.com',
   'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
 ];
