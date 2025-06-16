@@ -16,8 +16,15 @@ const app = (0, express_1.default)();
 // Middleware
 const allowedOrigins = [
     'http://localhost:3000',
+    'http://localhost:5173', // Vite default port
+    'http://localhost:4173', // Vite preview port
+    'https://beatinblink.com',
     'https://www.beatinblink.com',
-    'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
+    'https://beat-in-blink-ui.vercel.app', // Optional: clean production domain
+    // WebContainer origins with optional port numbers
+    /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
+    /^https:\/\/.*\.stackblitz\.io(?::\d+)?$/,
+    /^https:\/\/.*\.bolt\.new(?::\d+)?$/
 ];
 // Add dynamic frontend URL if defined in environment variables
 if (process.env.FRONTEND_URL) {
@@ -25,10 +32,25 @@ if (process.env.FRONTEND_URL) {
 }
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) {
+            return callback(null, true);
+        }
+        // Check if origin matches any of the allowed origins (including regex patterns)
+        const isAllowed = allowedOrigins.some(allowedOrigin => {
+            if (typeof allowedOrigin === 'string') {
+                return allowedOrigin === origin;
+            }
+            else if (allowedOrigin instanceof RegExp) {
+                return allowedOrigin.test(origin);
+            }
+            return false;
+        });
+        if (isAllowed) {
             callback(null, true);
         }
         else {
+            console.log(`CORS blocked origin: ${origin}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
