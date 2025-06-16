@@ -21,6 +21,7 @@ const allowedOrigins = [
   // WebContainer origins with optional port numbers
   /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
   /^https:\/\/.*\.stackblitz\.io(?::\d+)?$/,
+  /^https:\/\/.*\.staticblitz\.com(?::\d+)?$/,
   /^https:\/\/.*\.bolt\.new(?::\d+)?$/,
   // Additional WebContainer and development origins
   /^https:\/\/.*\.csb\.app(?::\d+)?$/,
@@ -99,7 +100,5 @@ if (process.env.VERCEL === undefined) {
   });
 }
 
-// Export handler for Vercel
-export default function handler(req: any, res: any) {
-  app(req, res);
-}
+// Export app directly for Vercel
+export default app;
