@@ -82,7 +82,7 @@ db.connect()
 
 // Routes
 app.get('/', (_req: Request, res: Response) => {
-  res.send(Buffer.from('EduExamine API is running 🎓', 'utf8'));
+  res.send('EduExamine API is running 🎓');
 });
 
 app.use('/api/protected', protectedRoutes);
