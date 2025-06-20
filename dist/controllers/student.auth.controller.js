@@ -1,8 +1,40 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStudentWithSearch = exports.getAllExams = exports.downloadSubmittedExam = exports.submitStudentExam = exports.studentResultById = void 0;
 const index_1 = require("../index");
-const docx_1 = require("docx");
 const studentResultById = async (req, res) => {
     const { studentId } = req.query;
     if (!studentId) {
@@ -112,6 +144,8 @@ const downloadSubmittedExam = async (req, res) => {
         return res.status(400).json({ message: 'studentId and examId are required' });
     }
     try {
+        // Dynamic import of docx to prevent buffer corruption during startup
+        const { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } = await Promise.resolve().then(() => __importStar(require('docx')));
         // Fetch exam and result details
         const resultQuery = `
       SELECT r.score, r.status, r.submitted_at, e.title AS exam_title
@@ -139,16 +173,16 @@ const downloadSubmittedExam = async (req, res) => {
             };
         });
         // Construct docx document
-        const doc = new docx_1.Document({
+        const doc = new Document({
             sections: [
                 {
                     headers: {
-                        default: new docx_1.Header({
+                        default: new Header({
                             children: [
-                                new docx_1.Paragraph({
-                                    alignment: docx_1.AlignmentType.CENTER,
+                                new Paragraph({
+                                    alignment: AlignmentType.CENTER,
                                     children: [
-                                        new docx_1.TextRun({ text: 'BeatInBlink Exam Paper', bold: true, size: 24 }),
+                                        new TextRun({ text: 'BeatInBlink Exam Paper', bold: true, size: 24 }),
                                     ],
                                 })
                             ]
@@ -160,28 +194,28 @@ const downloadSubmittedExam = async (req, res) => {
                         },
                     },
                     children: [
-                        new docx_1.Paragraph({
+                        new Paragraph({
                             border: {
-                                bottom: { color: 'auto', space: 1, style: docx_1.BorderStyle.SINGLE, size: 6 },
+                                bottom: { color: 'auto', space: 1, style: BorderStyle.SINGLE, size: 6 },
                             },
                             children: [
-                                new docx_1.TextRun({ text: data.exam_title || 'Exam Title', bold: true, size: 36 }),
+                                new TextRun({ text: data.exam_title || 'Exam Title', bold: true, size: 36 }),
                             ],
-                            alignment: docx_1.AlignmentType.CENTER,
+                            alignment: AlignmentType.CENTER,
                             spacing: { after: 400 },
                         }),
-                        new docx_1.Paragraph({
+                        new Paragraph({
                             children: [
-                                new docx_1.TextRun({ text: '📝 Exam Paper', bold: true, size: 28 }),
+                                new TextRun({ text: '📝 Exam Paper', bold: true, size: 28 }),
                             ],
                             spacing: { after: 300 },
                         }),
                         ...questions.flatMap((q, idx) => {
                             const questionParagraphs = [
-                                new docx_1.Paragraph({
+                                new Paragraph({
                                     spacing: { after: 200 },
                                     children: [
-                                        new docx_1.TextRun({
+                                        new TextRun({
                                             text: `${idx + 1}. ${q.text} (${q.marks} mark${q.marks > 1 ? 's' : ''})`,
                                             bold: true,
                                             size: 26,
@@ -191,19 +225,19 @@ const downloadSubmittedExam = async (req, res) => {
                             ];
                             if (Array.isArray(q.options)) {
                                 q.options.forEach((opt, i) => {
-                                    questionParagraphs.push(new docx_1.Paragraph({
+                                    questionParagraphs.push(new Paragraph({
                                         spacing: { after: 100 },
                                         children: [
-                                            new docx_1.TextRun({ text: `   ${String.fromCharCode(65 + i)}. ${opt}`, size: 24 }),
+                                            new TextRun({ text: `   ${String.fromCharCode(65 + i)}. ${opt}`, size: 24 }),
                                         ],
                                     }));
                                 });
                             }
-                            questionParagraphs.push(new docx_1.Paragraph({
+                            questionParagraphs.push(new Paragraph({
                                 spacing: { after: 300 },
                                 children: [
-                                    new docx_1.TextRun({ text: '   ✅ Correct Answer: ', bold: true, size: 24 }),
-                                    new docx_1.TextRun({ text: q.correctAnswer, size: 24 }),
+                                    new TextRun({ text: '   ✅ Correct Answer: ', bold: true, size: 24 }),
+                                    new TextRun({ text: q.correctAnswer, size: 24 }),
                                 ],
                             }));
                             return questionParagraphs;
@@ -212,7 +246,7 @@ const downloadSubmittedExam = async (req, res) => {
                 },
             ],
         });
-        const buffer = await docx_1.Packer.toBuffer(doc);
+        const buffer = await Packer.toBuffer(doc);
         res.setHeader('Content-Disposition', 'attachment; filename=exam_result.docx');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.send(buffer);
