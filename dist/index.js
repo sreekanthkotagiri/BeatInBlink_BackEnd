@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
-exports.default = handler;
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
@@ -24,7 +23,18 @@ const allowedOrigins = [
     // WebContainer origins with optional port numbers
     /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
     /^https:\/\/.*\.stackblitz\.io(?::\d+)?$/,
-    /^https:\/\/.*\.bolt\.new(?::\d+)?$/
+    /^https:\/\/.*\.staticblitz\.com(?::\d+)?$/,
+    /^https:\/\/.*\.bolt\.new(?::\d+)?$/,
+    // Additional WebContainer and development origins
+    /^https:\/\/.*\.csb\.app(?::\d+)?$/,
+    /^https:\/\/.*\.gitpod\.io(?::\d+)?$/,
+    /^https:\/\/.*\.repl\.co(?::\d+)?$/,
+    /^https:\/\/.*\.vercel\.app(?::\d+)?$/,
+    /^https:\/\/.*\.netlify\.app(?::\d+)?$/,
+    // Local development with any port
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+    /^http:\/\/0\.0\.0\.0:\d+$/
 ];
 // Add dynamic frontend URL if defined in environment variables
 if (process.env.FRONTEND_URL) {
@@ -83,7 +93,5 @@ if (process.env.VERCEL === undefined) {
         console.log(`🚀 Server running locally on http://localhost:${PORT}`);
     });
 }
-// Export handler for Vercel
-function handler(req, res) {
-    app(req, res);
-}
+// Export app directly for Vercel
+exports.default = app;
