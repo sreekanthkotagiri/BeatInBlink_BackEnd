@@ -12,26 +12,25 @@ const app = express();
 
 // Middleware
 const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173', // Vite default port
-  'http://localhost:4173', // Vite preview port
-  'http://localhost:8080',
-  'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:4173',
-  'http://127.0.0.1:8080',
-  'http://127.0.0.1:3001',
   'https://beatinblink.com',
   'https://www.beatinblink.com',
-  'https://beat-in-blink-ui.vercel.app', // Optional: clean production domain
+  'https://beat-in-blink-ui.vercel.app',
+  // General patterns for local development and online IDEs
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^http:\/\/0\.0\.0\.0:\d+$/,
   /^https:\/\/.*\.vercel\.app$/,
   /^https:\/\/.*\.netlify\.app$/,
   /^https:\/\/.*\.herokuapp\.com$/,
+  /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
   /^https:\/\/.*\.stackblitz\.io$/,
+  /^https:\/\/.*\.staticblitz\.com(?::\d+)?$/,
+  /^https:\/\/.*\.bolt\.new(?::\d+)?$/,
   /^https:\/\/.*\.codesandbox\.io$/,
+  /^https:\/\/.*\.csb\.app(?::\d+)?$/,
   /^https:\/\/.*\.gitpod\.io$/,
   /^https:\/\/.*\.replit\.dev$/,
+  /^https:\/\/.*\.repl\.co(?::\d+)?$/
 ];
 
 // Add dynamic frontend URL if defined in environment variables
