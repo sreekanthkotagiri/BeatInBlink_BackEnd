@@ -15,9 +15,23 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173', // Vite default port
   'http://localhost:4173', // Vite preview port
+  'http://localhost:8080',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:4173',
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:3001',
   'https://beatinblink.com',
   'https://www.beatinblink.com',
   'https://beat-in-blink-ui.vercel.app', // Optional: clean production domain
+  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/.*\.netlify\.app$/,
+  /^https:\/\/.*\.herokuapp\.com$/,
+  /^https:\/\/.*\.stackblitz\.io$/,
+  /^https:\/\/.*\.codesandbox\.io$/,
+  /^https:\/\/.*\.gitpod\.io$/,
+  /^https:\/\/.*\.replit\.dev$/,
 ];
 
 // Add dynamic frontend URL if defined in environment variables
