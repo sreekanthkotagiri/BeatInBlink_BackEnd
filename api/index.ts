@@ -12,53 +12,16 @@ const app = express();
 
 // Middleware
 const allowedOrigins = [
-  'https://beatinblink.com',
+  'http://localhost:3000',
   'https://www.beatinblink.com',
-  'https://beat-in-blink-ui.vercel.app',
-  // General patterns for local development and online IDEs
-  /^http:\/\/localhost:\d+$/,
-  /^http:\/\/127\.0\.0\.1:\d+$/,
-  /^http:\/\/0\.0\.0\.0:\d+$/,
-  /^https:\/\/.*\.vercel\.app$/,
-  /^https:\/\/.*\.netlify\.app$/,
-  /^https:\/\/.*\.herokuapp\.com$/,
-  /^https:\/\/.*\.webcontainer\.io(?::\d+)?$/,
-  /^https:\/\/.*\.stackblitz\.io$/,
-  /^https:\/\/.*\.staticblitz\.com(?::\d+)?$/,
-  /^https:\/\/.*\.bolt\.new(?::\d+)?$/,
-  /^https:\/\/.*\.codesandbox\.io$/,
-  /^https:\/\/.*\.csb\.app(?::\d+)?$/,
-  /^https:\/\/.*\.gitpod\.io$/,
-  /^https:\/\/.*\.replit\.dev$/,
-  /^https:\/\/.*\.repl\.co(?::\d+)?$/
+  'https://beat-in-blink-ui.vercel.app' // Optional: clean production domain
 ];
-
-// Add dynamic frontend URL if defined in environment variables
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
-}
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Check if origin matches any of the allowed origins (including regex patterns)
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return allowedOrigin === origin;
-      } else if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
-    
-    if (isAllowed) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log(`CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -80,7 +43,7 @@ db.connect()
 
 // Routes
 app.get('/', (_req: Request, res: Response) => {
-  res.json({ message: 'EduExamine API is running' });
+  res.send('EduExamine API is running 🎓');
 });
 
 app.use('/api/protected', protectedRoutes);
@@ -98,5 +61,7 @@ if (process.env.VERCEL === undefined) {
   });
 }
 
-// Export app directly for Vercel
-export default app;
+// Export handler for Vercel
+export default function handler(req: any, res: any) {
+  app(req, res);
+}

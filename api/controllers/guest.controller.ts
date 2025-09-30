@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../index';
+import { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } from 'docx';
 
 export const registerGuestUser = async (req: Request, res: Response) => {
   const { guestName } = req.body;
@@ -417,9 +418,6 @@ export const downloadExam = async (req: Request, res: Response) => {
   }
 
   try {
-    // Dynamic import of docx to prevent buffer corruption during startup
-    const { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } = await import('docx');
-
     // Fetch exam metadata
     const resultQuery = `
       SELECT e.title AS exam_title

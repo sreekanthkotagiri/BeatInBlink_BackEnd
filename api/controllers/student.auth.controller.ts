@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../index';
-
+import { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } from 'docx';
 export const studentResultById = async (req: Request, res: Response) => {
   const { studentId } = req.query;
 
@@ -132,9 +132,6 @@ export const downloadSubmittedExam = async (req: Request, res: Response) => {
     return res.status(400).json({ message: 'studentId and examId are required' });
   }
   try {
-    // Dynamic import of docx to prevent buffer corruption during startup
-    const { Document, Packer, Paragraph, TextRun, Header, AlignmentType, BorderStyle } = await import('docx');
-
     // Fetch exam and result details
     const resultQuery = `
       SELECT r.score, r.status, r.submitted_at, e.title AS exam_title
